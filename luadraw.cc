@@ -16,10 +16,8 @@ extern "C" {
 
 using namespace std;
 
-const int SCREEN_WIDTH = 800;
-const int SCREEN_HEIGHT = 800;
-
 string window_name;
+glm::ivec2 window_size;
 SDL_Window * gWindow = NULL;
 SDL_GLContext gContext;
 
@@ -41,7 +39,7 @@ void init_graphics() {
 
     gWindow = SDL_CreateWindow(window_name.c_str(), SDL_WINDOWPOS_UNDEFINED,
                                SDL_WINDOWPOS_UNDEFINED,
-                               SCREEN_WIDTH, SCREEN_HEIGHT,
+                               window_size.x, window_size.y,
                                SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
     if (! gWindow) die("window");
 
@@ -53,7 +51,7 @@ void init_graphics() {
     if (glewInit() != GLEW_OK) die("glew");
 
     // GL viewport
-    glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glViewport(0, 0, window_size.x, window_size.y);
 
     glEnable(GL_DEPTH_TEST);
 }
@@ -65,6 +63,30 @@ void close_graphics() {
     gWindow = NULL;
 
     SDL_Quit();
+}
+
+void luaD_setsizefields(lua_State * L, glm::ivec2 size) {
+    lua_pushstring(L, "x");
+    lua_pushnumber(L, size.x);
+    lua_settable(L, -3);
+
+    lua_pushstring(L, "y");
+    lua_pushnumber(L, size.y);
+    lua_settable(L, -3);
+}
+
+glm::ivec2 luaD_getsizefields(lua_State * L) {
+    glm::ivec2 size = {};
+
+    lua_getfield(L, -1, "x");
+    size.x = lua_tonumber(L, -1);
+    lua_pop(L, 1);
+
+    lua_getfield(L, -1, "y");
+    size.y = lua_tonumber(L, -1);
+    lua_pop(L, 1);
+
+    return size;
 }
 
 void luaD_setcolorfields(lua_State * L, glm::vec3 color) {
@@ -108,12 +130,23 @@ void read_lua() {
     luaL_openlibs(L);
 
     // set default lua variables
-    lua_pushstring(L, "Drawing with Lua!");
-    lua_setglobal(L, "window_name");
+    lua_newtable(L);
 
+    lua_pushstring(L, "name");
+    lua_pushstring(L, "Drawing with Lua!");
+    lua_settable(L, -3);
+
+    lua_pushstring(L, "size");
+    lua_newtable(L);
+    luaD_setsizefields(L, {640, 480});
+    lua_settable(L, -3);
+
+    lua_pushstring(L, "bgcolor");
     lua_newtable(L);
     luaD_setcolorfields(L, {1.0, 0.0, 1.0});
-    lua_setglobal(L, "bgcolor");
+    lua_settable(L, -3);
+
+    lua_setglobal(L, "window");
 
     int status;
 
@@ -126,12 +159,20 @@ void read_lua() {
     if (status != LUA_OK) die(lua_tostring(L, -1));
 
     // read altered lua variables
-    lua_getglobal(L, "window_name");
+    lua_getglobal(L, "window");
+
+    lua_getfield(L, -1, "name");
     window_name = lua_tostring(L, -1);
     lua_pop(L, 1);
 
-    lua_getglobal(L, "bgcolor");
+    lua_getfield(L, -1, "size");
+    window_size = luaD_getsizefields(L);
+    lua_pop(L, 1);
+
+    lua_getfield(L, -1, "bgcolor");
     bgcolor = luaD_getcolorfields(L);
+    lua_pop(L, 1);
+
     lua_pop(L, 1);
 }
 
